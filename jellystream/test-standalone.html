@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>JellyStream - Test Preview</title>
+    <link rel="stylesheet" href="jellystream.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #101010;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        /* Simulated Jellyfin background */
+        .jellyfin-bg {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, #001529, #002a4d);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            color: #444;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Simulated Jellyfin background -->
+    <div class="jellyfin-bg">
+        [Jellyfin would be here - Press BLUE/B to toggle]
+    </div>
+
+    <!-- JellyStream Overlay -->
+    <div id="jellystream-app" class="">
+        <header class="js-header">
+            <div class="js-logo">JellyStream</div>
+            <nav class="js-nav">
+                <button class="js-nav-tab active" data-tab="discover">Discover</button>
+                <button class="js-nav-tab" data-tab="movies">Movies</button>
+                <button class="js-nav-tab" data-tab="tv">TV Shows</button>
+                <button class="js-nav-tab" data-tab="requests">My Requests</button>
+            </nav>
+            <div class="js-header-actions">
+                <button class="js-search-btn">Search</button>
+            </div>
+        </header>
+
+        <main class="js-main">
+            <!-- Discover Tab -->
+            <div id="tab-discover" class="js-tab-content active">
+                <section class="js-section">
+                    <h2 class="js-section-title">Trending Now</h2>
+                    <div class="js-card-row" id="trending-row">
+                        <!-- Cards populated by JS -->
+                    </div>
+                </section>
+                <section class="js-section">
+                    <h2 class="js-section-title">Popular Movies</h2>
+                    <div class="js-card-row" id="popular-movies-row"></div>
+                </section>
+                <section class="js-section">
+                    <h2 class="js-section-title">Popular TV Shows</h2>
+                    <div class="js-card-row" id="popular-tv-row"></div>
+                </section>
+            </div>
+
+            <!-- Movies Tab -->
+            <div id="tab-movies" class="js-tab-content">
+                <section class="js-section">
+                    <h2 class="js-section-title">Browse by Genre</h2>
+                    <div class="js-genre-row" id="movie-genres"></div>
+                </section>
+                <section class="js-section">
+                    <h2 class="js-section-title">All Movies</h2>
+                    <div class="js-card-row" id="all-movies-row"></div>
+                </section>
+            </div>
+
+            <!-- TV Tab -->
+            <div id="tab-tv" class="js-tab-content">
+                <section class="js-section">
+                    <h2 class="js-section-title">Browse by Genre</h2>
+                    <div class="js-genre-row" id="tv-genres"></div>
+                </section>
+                <section class="js-section">
+                    <h2 class="js-section-title">All TV Shows</h2>
+                    <div class="js-card-row" id="all-tv-row"></div>
+                </section>
+            </div>
+
+            <!-- Requests Tab -->
+            <div id="tab-requests" class="js-tab-content">
+                <section class="js-section">
+                    <h2 class="js-section-title">My Requests</h2>
+                    <div class="js-card-row" id="my-requests-row"></div>
+                </section>
+            </div>
+        </main>
+
+        <footer class="js-footer">
+            <div class="js-footer-hint">
+                <span><span class="js-key blue">BLUE</span> Jellyfin</span>
+                <span><span class="js-key green">GREEN</span> Request</span>
+                <span><span class="js-key yellow">YELLOW</span> Info</span>
+                <span><span class="js-key red">RED</span> Settings</span>
+            </div>
+        </footer>
+
+        <!-- Details Modal -->
+        <div id="js-modal" class="js-modal hidden">
+            <div class="js-modal-backdrop"></div>
+            <div class="js-modal-content">
+                <div class="js-modal-poster"><img id="modal-poster" src="" alt=""></div>
+                <div class="js-modal-info">
+                    <h1 id="modal-title" class="js-modal-title"></h1>
+                    <div class="js-modal-meta">
+                        <span id="modal-year"></span>
+                        <span id="modal-rating"></span>
+                        <span id="modal-runtime"></span>
+                    </div>
+                    <p id="modal-overview" class="js-modal-overview"></p>
+                    <div class="js-modal-actions">
+                        <button id="modal-request-btn" class="js-btn js-btn-primary">Request</button>
+                        <button id="modal-close-btn" class="js-btn js-btn-secondary">Close</button>
+                    </div>
+                    <div id="modal-status" class="js-modal-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Modal -->
+        <div id="js-search-modal" class="js-modal hidden">
+            <div class="js-modal-backdrop"></div>
+            <div class="js-search-content">
+                <h2>Search</h2>
+                <input type="text" id="js-search-input" class="js-search-input" placeholder="Search movies and TV shows...">
+                <div id="js-search-results" class="js-search-results"></div>
+                <button id="search-close-btn" class="js-btn js-btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock data for testing without API
+        var mockMovies = [
+            { id: 1, title: 'Dune', posterPath: '/d5NXSklXo0qyIYkgV94XAgMIckC.jpg', releaseDate: '2021-09-15', voteAverage: 8.0 },
+            { id: 2, title: 'Oppenheimer', posterPath: '/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg', releaseDate: '2023-07-21', voteAverage: 8.5 },
+            { id: 3, title: 'The Batman', posterPath: '/74xTEgt7R36Fpooo50r9T25onhq.jpg', releaseDate: '2022-03-04', voteAverage: 7.8 },
+            { id: 4, title: 'Avatar 2', posterPath: '/t6HIqrRAclMCA60NsSmeqe9RmNV.jpg', releaseDate: '2022-12-16', voteAverage: 7.6 },
+            { id: 5, title: 'Top Gun: Maverick', posterPath: '/62HCnUTziyWcpDaBO2i1DG35fXQ.jpg', releaseDate: '2022-05-27', voteAverage: 8.3 },
+            { id: 6, title: 'John Wick 4', posterPath: '/vZloFAK7NmvMGKE7VkF5UHaz0I.jpg', releaseDate: '2023-03-24', voteAverage: 7.9 },
+            { id: 7, title: 'Barbie', posterPath: '/iuFNMS8U5cb6xfzi51Dbkovj7vM.jpg', releaseDate: '2023-07-21', voteAverage: 7.2 },
+            { id: 8, title: 'Spider-Man', posterPath: '/1g0dhYtq4irTY1GPXvft6k4YLjm.jpg', releaseDate: '2021-12-17', voteAverage: 8.0 }
+        ];
+
+        var mockTV = [
+            { id: 101, name: 'The Last of Us', posterPath: '/uKvVjHNqB5VmOrdxqAt2F7J78ED.jpg', firstAirDate: '2023-01-15', voteAverage: 8.8, mediaType: 'tv' },
+            { id: 102, name: 'House of Dragon', posterPath: '/z2yahl2uefxDCl0nogcRBstwruJ.jpg', firstAirDate: '2022-08-21', voteAverage: 8.4, mediaType: 'tv' },
+            { id: 103, name: 'Wednesday', posterPath: '/9PFonBhy4cQy7Jz20NpMygczOkv.jpg', firstAirDate: '2022-11-23', voteAverage: 8.1, mediaType: 'tv' },
+            { id: 104, name: 'The Bear', posterPath: '/khiLn6fA6WxHYBvfmMTMySUlfpP.jpg', firstAirDate: '2022-06-23', voteAverage: 8.5, mediaType: 'tv' },
+            { id: 105, name: 'Andor', posterPath: '/59SVNwLfoMnZPPB6ukW6dlPxAdI.jpg', firstAirDate: '2022-09-21', voteAverage: 8.3, mediaType: 'tv' },
+            { id: 106, name: 'Severance', posterPath: '/lFf6GEIy4wMy1mJbTf9W1Lj5jXz.jpg', firstAirDate: '2022-02-18', voteAverage: 8.7, mediaType: 'tv' }
+        ];
+
+        var genres = [
+            { id: 28, name: 'Action' },
+            { id: 12, name: 'Adventure' },
+            { id: 16, name: 'Animation' },
+            { id: 35, name: 'Comedy' },
+            { id: 80, name: 'Crime' },
+            { id: 18, name: 'Drama' },
+            { id: 14, name: 'Fantasy' },
+            { id: 27, name: 'Horror' },
+            { id: 878, name: 'Sci-Fi' },
+            { id: 53, name: 'Thriller' }
+        ];
+
+        // Create a card element
+        function createCard(item) {
+            var card = document.createElement('div');
+            card.className = 'js-card';
+            card.setAttribute('data-id', item.id);
+            card.setAttribute('data-type', item.mediaType || 'movie');
+
+            var posterPath = item.posterPath
+                ? 'https://image.tmdb.org/t/p/w300' + item.posterPath
+                : '';
+
+            var title = item.title || item.name || 'Unknown';
+            var year = (item.releaseDate || item.firstAirDate || '').substring(0, 4);
+
+            card.innerHTML =
+                '<div class="js-card-poster">' +
+                    (posterPath ? '<img src="' + posterPath + '" alt="' + title + '">' : '<div class="js-card-no-poster">No Image</div>') +
+                '</div>' +
+                '<div class="js-card-info">' +
+                    '<div class="js-card-title">' + title + '</div>' +
+                    (year ? '<div class="js-card-year">' + year + '</div>' : '') +
+                '</div>';
+
+            card.addEventListener('click', function() {
+                showDetails(item);
+            });
+
+            return card;
+        }
+
+        // Create genre card
+        function createGenreCard(genre, type) {
+            var card = document.createElement('div');
+            card.className = 'js-genre-card';
+            card.setAttribute('data-genre', genre.id);
+            card.setAttribute('data-type', type);
+            card.innerHTML = '<span>' + genre.name + '</span>';
+            return card;
+        }
+
+        // Render cards
+        function renderCards(rowId, items) {
+            var row = document.getElementById(rowId);
+            if (!row) return;
+            row.innerHTML = '';
+            items.forEach(function(item) {
+                row.appendChild(createCard(item));
+            });
+        }
+
+        // Render genres
+        function renderGenres(rowId, type) {
+            var row = document.getElementById(rowId);
+            if (!row) return;
+            row.innerHTML = '';
+            genres.forEach(function(genre) {
+                row.appendChild(createGenreCard(genre, type));
+            });
+        }
+
+        // Show details modal
+        function showDetails(item) {
+            var modal = document.getElementById('js-modal');
+            var posterPath = item.posterPath ? 'https://image.tmdb.org/t/p/w500' + item.posterPath : '';
+
+            document.getElementById('modal-poster').src = posterPath;
+            document.getElementById('modal-title').textContent = item.title || item.name;
+            document.getElementById('modal-year').textContent = (item.releaseDate || item.firstAirDate || '').substring(0, 4);
+            document.getElementById('modal-rating').textContent = item.voteAverage ? item.voteAverage.toFixed(1) + '/10' : '';
+            document.getElementById('modal-overview').textContent = 'This is a sample overview for testing. In the real app, this would show the movie or TV show description from Jellyseerr.';
+
+            modal.classList.remove('hidden');
+        }
+
+        // Tab switching
+        document.querySelectorAll('.js-nav-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                // Update tabs
+                document.querySelectorAll('.js-nav-tab').forEach(function(t) { t.classList.remove('active'); });
+                tab.classList.add('active');
+
+                // Update content
+                document.querySelectorAll('.js-tab-content').forEach(function(c) { c.classList.remove('active'); });
+                document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Modal close
+        document.getElementById('modal-close-btn').addEventListener('click', function() {
+            document.getElementById('js-modal').classList.add('hidden');
+        });
+
+        // Toggle JellyStream
+        function toggleJellyStream() {
+            var app = document.getElementById('jellystream-app');
+            app.classList.toggle('hidden');
+        }
+
+        // Key handler
+        document.addEventListener('keydown', function(e) {
+            if (e.keyCode === 66) { // B key
+                toggleJellyStream();
+            }
+            if (e.keyCode === 27) { // ESC
+                document.getElementById('js-modal').classList.add('hidden');
+            }
+        });
+
+        // Initialize
+        renderCards('trending-row', mockMovies.concat(mockTV));
+        renderCards('popular-movies-row', mockMovies);
+        renderCards('popular-tv-row', mockTV);
+        renderCards('all-movies-row', mockMovies);
+        renderCards('all-tv-row', mockTV);
+        renderGenres('movie-genres', 'movie');
+        renderGenres('tv-genres', 'tv');
+        document.getElementById('my-requests-row').innerHTML = '<div class="js-empty">No requests yet. Browse and request content!</div>';
+    </script>
+</body>
+</html>

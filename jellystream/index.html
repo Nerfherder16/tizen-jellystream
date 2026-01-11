@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JellyStream</title>
+
+    <!-- Main Styles -->
+    <link rel="stylesheet" href="css/main.css?v=7">
+
+    <!-- Core JavaScript - Load order matters! -->
+    <!-- 1. State Management -->
+    <script src="js/state-manager.js"></script>
+
+    <!-- 2. API Clients -->
+    <script src="js/api/jellyfin-client.js"></script>
+    <script src="js/api/jellyseerr-client.js"></script>
+    <script src="js/api/authentik-auth.js"></script>
+    <script src="js/api/quick-connect.js"></script>
+
+    <!-- 3. Core Systems -->
+    <script src="js/lifecycle.js"></script>
+    <script src="js/router.js"></script>
+
+    <!-- 4. UI Utilities -->
+    <script src="js/ui/focus-manager.js"></script>
+    <script src="js/ui/modal-manager.js"></script>
+    <!-- <script src="js/ui/notification-service.js"></script> -->
+
+    <!-- 5. Screens (will be created progressively) -->
+    <script src="js/screens/splash-screen.js" defer></script>
+    <script src="js/screens/login-screen.js" defer></script>
+    <script src="js/screens/home-screen.js" defer></script>
+    <script src="js/screens/discover-screen.js" defer></script>
+    <script src="js/screens/library-screen.js" defer></script>
+    <script src="js/screens/search-screen.js" defer></script>
+    <script src="js/screens/settings-screen.js" defer></script>
+    <script src="js/screens/player-screen.js" defer></script>
+
+    <!-- 6. Application Bootstrap - Must be last! -->
+    <script src="js/main.js"></script>
+</head>
+<body>
+    <!-- App Container -->
+    <div id="app">
+
+        <!-- Splash Screen -->
+        <div id="splash-screen" class="screen active">
+            <div class="splash-content">
+                <h1 class="splash-logo">JellyStream</h1>
+                <div class="splash-loading">
+                    <div class="spinner"></div>
+                    <p class="splash-message">Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen hidden">
+            <div class="login-content">
+                <h1>Welcome to JellyStream</h1>
+
+                <!-- Quick Connect Login (Primary) -->
+                <div class="login-form" id="sso-login-form">
+                    <h2>Sign In with Quick Connect</h2>
+                    <p class="login-hint" style="margin-bottom: 20px;">Connect your TV to Jellyfin using your phone or computer.</p>
+
+                    <button id="start-sso-btn" class="btn btn-primary btn-large" style="width: 100%; padding: 15px; font-size: 18px;">
+                        Get Quick Connect Code
+                    </button>
+
+                    <p style="margin-top: 20px; color: #888; font-size: 14px; text-align: center;">
+                        You'll approve the connection from your Jellyfin dashboard.
+                    </p>
+
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #444;">
+
+                    <details style="padding: 15px; background: #2a2a2a; border-radius: 8px;">
+                        <summary style="cursor: pointer; font-weight: bold; color: #888;">Manual Login (Advanced)</summary>
+                        <div style="margin-top: 15px;">
+                            <div class="form-group">
+                                <label for="jellyfin-server">Server URL</label>
+                                <input type="text" id="jellyfin-server" placeholder="https://jellyfin.streamy.tube" value="https://jellyfin.streamy.tube" />
+                            </div>
+                            <div class="form-group">
+                                <label for="jellyfin-access-token">Access Token</label>
+                                <input type="password" id="jellyfin-access-token" placeholder="Paste your access token" style="font-family: monospace;" />
+                            </div>
+                            <div class="form-group">
+                                <label for="jellyfin-user-id">User ID</label>
+                                <input type="text" id="jellyfin-user-id" placeholder="Paste your user ID" style="font-family: monospace;" />
+                            </div>
+                            <button id="login-jellyfin-btn" class="btn btn-secondary">Connect Manually</button>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Quick Connect Code Display Panel -->
+                <div class="login-form" id="device-code-panel" style="display: none;">
+                    <h2>Quick Connect Code</h2>
+                    <p style="margin-bottom: 20px;">On your phone or computer:</p>
+
+                    <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="margin-bottom: 10px; color: #ccc;">1. Go to your Jellyfin dashboard</p>
+                        <div class="device-code-url" style="text-align: center; margin-bottom: 15px;">
+                            <a href="https://jellyfin.streamy.tube" target="_blank" style="color: var(--color-primary); font-size: 18px; font-weight: bold; text-decoration: none;">
+                                jellyfin.streamy.tube
+                            </a>
+                        </div>
+                        <p style="margin-bottom: 5px; color: #ccc;">2. Log in with Authentik SSO</p>
+                        <p style="color: #ccc;">3. Go to Settings > Quick Connect and enter:</p>
+                    </div>
+
+                    <div id="device-code-display" class="device-code" style="background: var(--color-primary); color: white; padding: 20px; border-radius: 8px; text-align: center; font-size: 48px; font-weight: bold; letter-spacing: 4px; font-family: monospace;">
+                        ------
+                    </div>
+
+                    <p id="device-code-status" style="margin-top: 20px; text-align: center; color: #888;">
+                        Waiting for approval...
+                    </p>
+
+                    <button id="cancel-device-code-btn" class="btn btn-secondary" style="margin-top: 20px; width: 100%;">Cancel</button>
+                </div>
+
+                <div class="login-form" id="jellyseerr-form" style="display: none;">
+                    <h2>Connect to Jellyseerr</h2>
+                    <div class="form-group">
+                        <label for="jellyseerr-server">Jellyseerr Server URL</label>
+                        <input type="text" id="jellyseerr-server" placeholder="http://192.168.1.100:5055" />
+                    </div>
+                    <div class="form-group">
+                        <label for="jellyseerr-api-key">API Key</label>
+                        <input type="text" id="jellyseerr-api-key" placeholder="API Key" />
+                    </div>
+                    <button id="login-jellyseerr-btn" class="btn btn-primary">Connect to Jellyseerr</button>
+                </div>
+
+                <div class="quick-connect-panel" id="quick-connect-panel" style="display: none;">
+                    <h2>Quick Connect</h2>
+                    <p>Enter this code on your Jellyfin dashboard:</p>
+                    <div class="quick-connect-code" id="quick-connect-code">------</div>
+                    <p class="quick-connect-status" id="quick-connect-status">Waiting for approval...</p>
+                    <button id="cancel-quick-connect-btn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen hidden">
+            <div class="home-header">
+                <h1>JellyStream</h1>
+                <div class="user-info">
+                    <span id="user-name">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Continue Watching Section -->
+            <div class="content-section">
+                <h2>Continue Watching</h2>
+                <div class="content-row" id="continue-watching-row">
+                    <div class="loading-placeholder">Loading your content...</div>
+                </div>
+            </div>
+
+            <!-- Trending Section -->
+            <div class="content-section">
+                <h2>Trending Now</h2>
+                <div class="content-row" id="trending-row">
+                    <div class="loading-placeholder">Loading trending...</div>
+                </div>
+            </div>
+
+            <!-- Recently Added Section -->
+            <div class="content-section">
+                <h2>Recently Added</h2>
+                <div class="content-row" id="recently-added-row">
+                    <div class="loading-placeholder">Loading new content...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Discover Screen -->
+        <div id="discover-screen" class="screen hidden">
+            <div class="discover-container">
+                <!-- Header -->
+                <div class="discover-header">
+                    <h1>Discover</h1>
+                    <span id="discover-count" class="discover-count"></span>
+                </div>
+
+                <!-- Section Tabs (Movies / TV Shows) -->
+                <div id="discover-sections" class="discover-sections">
+                    <!-- Section tabs rendered by JS -->
+                </div>
+
+                <!-- Category Tabs -->
+                <div id="discover-tabs" class="discover-tabs">
+                    <!-- Category tabs rendered by JS -->
+                </div>
+
+                <!-- Content Area -->
+                <div id="discover-content" class="discover-content">
+                    <!-- Content Grid -->
+                    <div id="discover-grid" class="discover-grid">
+                        <!-- Cards rendered by JS -->
+                    </div>
+
+                    <!-- Loading Indicator -->
+                    <div id="discover-loading" class="discover-loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Library Screen -->
+        <div id="library-screen" class="screen hidden">
+            <div class="library-header">
+                <div class="library-header-top">
+                    <h1 id="library-title">Library</h1>
+                    <div class="library-controls">
+                        <select id="library-sort" class="library-sort focusable">
+                            <option value="SortName-Ascending">Name (A-Z)</option>
+                            <option value="SortName-Descending">Name (Z-A)</option>
+                            <option value="DateCreated-Descending">Date Added (Newest)</option>
+                            <option value="DateCreated-Ascending">Date Added (Oldest)</option>
+                            <option value="PremiereDate-Descending">Release Date (Newest)</option>
+                            <option value="PremiereDate-Ascending">Release Date (Oldest)</option>
+                            <option value="CommunityRating-Descending">Rating (Highest)</option>
+                        </select>
+                        <span id="library-count" class="library-count"></span>
+                    </div>
+                </div>
+                <div id="library-tabs" class="library-tabs">
+                    <!-- Library tabs will be rendered here -->
+                </div>
+            </div>
+
+            <div id="library-grid" class="library-grid">
+                <!-- Media cards will be rendered here -->
+            </div>
+
+            <div id="library-loading" class="library-loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <!-- Search Screen -->
+        <div id="search-screen" class="screen hidden">
+            <div class="search-container">
+                <!-- Search Header -->
+                <div class="search-header">
+                    <h1>Search</h1>
+                    <span id="search-results-count" class="search-results-count"></span>
+                </div>
+
+                <!-- Search Input Display -->
+                <div class="search-input-container">
+                    <div id="search-input-display" class="search-input-display placeholder">Type to search...</div>
+                </div>
+
+                <!-- On-Screen Keyboard -->
+                <div id="search-keyboard" class="search-keyboard">
+                    <!-- Keyboard keys will be rendered here -->
+                </div>
+
+                <!-- Search Results -->
+                <div id="search-results" class="search-results">
+                    <p class="search-placeholder">Start typing to search your library</p>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="search-loading" class="search-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Searching...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settings-screen" class="screen hidden">
+            <div class="settings-container">
+                <div class="settings-header">
+                    <h1>Settings</h1>
+                </div>
+
+                <div class="settings-content">
+                    <!-- Account Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Account</h2>
+                        <div id="settings-account-info" class="settings-info">
+                            <!-- Account info will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-logout-btn" class="settings-item focusable settings-item-danger" tabindex="0">
+                                <span class="settings-item-icon">🚪</span>
+                                <span class="settings-item-text">Log Out</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Server Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Jellyfin Server</h2>
+                        <div id="settings-server-info" class="settings-info">
+                            <!-- Server info will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-switch-server-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">🔄</span>
+                                <span class="settings-item-text">Switch Server</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Playback Settings Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Playback</h2>
+                        <div id="settings-playback-info" class="settings-info">
+                            <!-- Playback settings will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-playback-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">▶️</span>
+                                <span class="settings-item-text">Playback Settings</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Subtitles Settings Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Subtitles</h2>
+                        <div id="settings-subtitles-info" class="settings-info">
+                            <!-- Subtitle settings will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-subtitles-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">💬</span>
+                                <span class="settings-item-text">Subtitle Settings</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Display Settings Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Display</h2>
+                        <div id="settings-display-info" class="settings-info">
+                            <!-- Display settings will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-display-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">🖥️</span>
+                                <span class="settings-item-text">Display Settings</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Extensions/Plugins Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Extensions</h2>
+                        <div id="settings-plugins-info" class="settings-info">
+                            <!-- Plugins list will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-plugins-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">🧩</span>
+                                <span class="settings-item-text">View All Plugins</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Jellyseerr Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Jellyseerr</h2>
+                        <div id="settings-jellyseerr-info" class="settings-info">
+                            <!-- Jellyseerr info will be rendered here -->
+                        </div>
+                        <div class="settings-actions">
+                            <button id="settings-jellyseerr-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">🎬</span>
+                                <span class="settings-item-text">Configure Jellyseerr</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Storage Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Storage</h2>
+                        <div class="settings-actions">
+                            <button id="settings-clear-cache-btn" class="settings-item focusable" tabindex="0">
+                                <span class="settings-item-icon">🗑️</span>
+                                <span class="settings-item-text">Clear Cache</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- About Section -->
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">About</h2>
+                        <div id="settings-app-info" class="settings-info">
+                            <!-- App info will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Screen -->
+        <div id="player-screen" class="screen hidden">
+            <div class="player-container">
+                <video id="player-video" class="video-player"></video>
+
+                <!-- Loading indicator -->
+                <div id="player-loading" class="player-loading">
+                    <div class="spinner"></div>
+                    <p>Loading video...</p>
+                </div>
+
+                <!-- Player controls overlay -->
+                <div class="player-controls visible">
+                    <div class="controls-gradient"></div>
+
+                    <!-- Progress bar -->
+                    <div class="progress-container">
+                        <div class="progress-track">
+                            <div id="progress-bar" class="progress-bar"></div>
+                        </div>
+                    </div>
+
+                    <!-- Time and buttons -->
+                    <div class="controls-row">
+                        <span id="current-time" class="time-display">0:00</span>
+
+                        <div class="control-buttons">
+                            <button class="control-btn" id="rewind-btn" title="Rewind 10s">⏪</button>
+                            <button class="control-btn control-btn-large" id="play-pause-btn" title="Play/Pause">▶</button>
+                            <button class="control-btn" id="forward-btn" title="Forward 10s">⏩</button>
+                        </div>
+
+                        <div class="control-buttons-right">
+                            <button class="control-btn" id="tracks-btn" title="Audio & Subtitles">CC</button>
+                        </div>
+
+                        <span id="remaining-time" class="time-display">-0:00</span>
+                    </div>
+
+                    <!-- Media title -->
+                    <div class="media-title-bar">
+                        <h2 id="player-title">Loading...</h2>
+                    </div>
+                </div>
+
+                <!-- Seek indicator -->
+                <div id="seek-indicator" class="seek-indicator"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation Bar -->
+        <nav id="nav-bar" class="nav-bar" style="display: none;">
+            <button class="nav-item focusable active" data-screen="home">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                </span>
+                <span class="nav-label">Home</span>
+            </button>
+            <button class="nav-item focusable" data-screen="discover">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                    </svg>
+                </span>
+                <span class="nav-label">Discover</span>
+            </button>
+            <button class="nav-item focusable" data-screen="library">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                        <polyline points="17 2 12 7 7 2"></polyline>
+                    </svg>
+                </span>
+                <span class="nav-label">Library</span>
+            </button>
+            <button class="nav-item focusable" data-screen="search">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </span>
+                <span class="nav-label">Search</span>
+            </button>
+            <button class="nav-item focusable" data-screen="settings">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </span>
+                <span class="nav-label">Settings</span>
+            </button>
+        </nav>
+
+    <!-- Global Loading Indicator -->
+    <div id="loading-indicator" class="loading-indicator hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+</body>
+</html>
