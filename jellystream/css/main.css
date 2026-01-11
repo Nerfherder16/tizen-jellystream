@@ -107,6 +107,15 @@ body {
     color: var(--color-text-secondary);
 }
 
+.splash-banner {
+    max-width: 600px;
+    width: 100%;
+    height: auto;
+    margin-bottom: var(--spacing-xl);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
 /* Spinner */
 .spinner {
     width: 48px;
@@ -136,6 +145,16 @@ body {
     max-width: 600px;
     width: 100%;
     padding-bottom: var(--spacing-xl);
+}
+
+.login-banner {
+    display: block;
+    max-width: 400px;
+    width: 100%;
+    height: auto;
+    margin: 0 auto var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 .login-content h1 {
