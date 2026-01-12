@@ -15,6 +15,7 @@
         isSearching: false,
         searchTimeout: null,
         selectedKeyIndex: 0,
+        keyboardModalOpen: false,
 
         // On-screen keyboard layout
         keyboard: [
@@ -52,14 +53,21 @@
             this.jellyseerrResults = [];
             this.mergedResults = [];
             this.libraryMap = {};
+            this.keyboardModalOpen = false;
             this.updateSearchInput();
             this.clearResults();
 
-            // Focus first keyboard key
+            // Hide keyboard modal if open
+            var modal = document.getElementById('keyboard-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+
+            // Focus search input
             setTimeout(function() {
-                var firstKey = document.querySelector('.keyboard-key.focusable');
-                if (firstKey && window.FocusManager) {
-                    window.FocusManager.setFocus(firstKey);
+                var searchInput = document.getElementById('search-input-display');
+                if (searchInput && window.FocusManager) {
+                    window.FocusManager.setFocus(searchInput);
                 }
             }, 100);
         },
@@ -108,6 +116,22 @@
         bindEvents: function() {
             var self = this;
 
+            // Search input click/enter to open keyboard modal
+            var searchInput = document.getElementById('search-input-display');
+            if (searchInput) {
+                searchInput.addEventListener('click', function() {
+                    self.showKeyboardModal();
+                });
+
+                // Handle Enter key on search input (TV remote OK button)
+                searchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.keyCode === 13) {
+                        e.preventDefault();
+                        self.showKeyboardModal();
+                    }
+                });
+            }
+
             // Keyboard key clicks
             var keyboard = document.getElementById('search-keyboard');
             if (keyboard) {
@@ -120,10 +144,9 @@
             }
 
             // Physical keyboard input (for testing in browser)
-            var searchInput = document.getElementById('search-input-display');
             if (searchInput) {
                 document.addEventListener('keypress', function(e) {
-                    if (window.StateManager && window.StateManager.ui.currentScreen === 'search-screen') {
+                    if (window.StateManager && window.StateManager.ui.currentScreen === 'search-screen' && self.keyboardModalOpen) {
                         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
                             self.handleKeyPress(e.key.toUpperCase());
                         }
@@ -131,15 +154,66 @@
                 });
 
                 document.addEventListener('keydown', function(e) {
-                    if (window.StateManager && window.StateManager.ui.currentScreen === 'search-screen') {
+                    if (window.StateManager && window.StateManager.ui.currentScreen === 'search-screen' && self.keyboardModalOpen) {
                         if (e.key === 'Backspace') {
                             e.preventDefault();
                             self.handleKeyPress('BACKSPACE');
                         } else if (e.key === 'Enter') {
                             self.performSearch();
+                            self.hideKeyboardModal();
+                        } else if (e.key === 'Escape') {
+                            self.hideKeyboardModal();
                         }
                     }
                 });
+            }
+        },
+
+        /**
+         * Show keyboard modal
+         */
+        showKeyboardModal: function() {
+            var modal = document.getElementById('keyboard-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                this.keyboardModalOpen = true;
+                this.updateKeyboardInput();
+
+                // Focus first keyboard key
+                setTimeout(function() {
+                    var firstKey = document.querySelector('.keyboard-key.focusable');
+                    if (firstKey && window.FocusManager) {
+                        window.FocusManager.setFocus(firstKey);
+                    }
+                }, 100);
+            }
+        },
+
+        /**
+         * Hide keyboard modal
+         */
+        hideKeyboardModal: function() {
+            var modal = document.getElementById('keyboard-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                this.keyboardModalOpen = false;
+
+                // Focus back to search input
+                var searchInput = document.getElementById('search-input-display');
+                if (searchInput && window.FocusManager) {
+                    window.FocusManager.setFocus(searchInput);
+                }
+            }
+        },
+
+        /**
+         * Update keyboard modal input display
+         */
+        updateKeyboardInput: function() {
+            var display = document.getElementById('keyboard-input-display');
+            if (display) {
+                display.textContent = this.searchQuery || 'Type to search...';
+                display.classList.toggle('placeholder', !this.searchQuery);
             }
         },
 
@@ -166,12 +240,14 @@
                     break;
                 case 'SEARCH':
                     this.performSearch();
+                    this.hideKeyboardModal();
                     return;
                 default:
                     this.searchQuery += key;
             }
 
             this.updateSearchInput();
+            this.updateKeyboardInput();
 
             // Auto-search after typing (debounced)
             this.debounceSearch();
@@ -627,6 +703,17 @@
             var div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        },
+
+        /**
+         * Handle back button - returns true if handled (modal closed), false if should navigate away
+         */
+        handleBack: function() {
+            if (this.keyboardModalOpen) {
+                this.hideKeyboardModal();
+                return true; // Handled, don't navigate away
+            }
+            return false; // Not handled, let normal back navigation occur
         }
     };
 

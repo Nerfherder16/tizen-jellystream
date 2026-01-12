@@ -119,6 +119,11 @@
         handleBackKey: function() {
             console.log('AppLifecycle: Back key pressed');
 
+            // If search keyboard modal is open, close it first
+            if (window.SearchScreen && window.SearchScreen.handleBack && window.SearchScreen.handleBack()) {
+                return true;
+            }
+
             // If modal is open, close it
             if (window.StateManager && window.StateManager.ui.isModalOpen) {
                 if (window.ModalManager && window.ModalManager.close) {

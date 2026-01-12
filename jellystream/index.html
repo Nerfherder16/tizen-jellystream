@@ -6,7 +6,7 @@
     <title>JellyStream</title>
 
     <!-- Main Styles -->
-    <link rel="stylesheet" href="css/main.css?v=7">
+    <link rel="stylesheet" href="css/main.css?v=13">
 
     <!-- Core JavaScript - Load order matters! -->
     <!-- 1. State Management -->
@@ -218,23 +218,19 @@
         <!-- Library Screen -->
         <div id="library-screen" class="screen hidden">
             <div class="library-header">
-                <div class="library-header-top">
-                    <h1 id="library-title">Library</h1>
-                    <div class="library-controls">
-                        <select id="library-sort" class="library-sort focusable">
-                            <option value="SortName-Ascending">Name (A-Z)</option>
-                            <option value="SortName-Descending">Name (Z-A)</option>
-                            <option value="DateCreated-Descending">Date Added (Newest)</option>
-                            <option value="DateCreated-Ascending">Date Added (Oldest)</option>
-                            <option value="PremiereDate-Descending">Release Date (Newest)</option>
-                            <option value="PremiereDate-Ascending">Release Date (Oldest)</option>
-                            <option value="CommunityRating-Descending">Rating (Highest)</option>
-                        </select>
-                        <span id="library-count" class="library-count"></span>
+                <div class="library-tabs-row">
+                    <div id="library-tabs" class="library-tabs">
+                        <!-- Library tabs will be rendered here -->
                     </div>
-                </div>
-                <div id="library-tabs" class="library-tabs">
-                    <!-- Library tabs will be rendered here -->
+                    <select id="library-sort" class="library-sort focusable">
+                        <option value="SortName-Ascending">Name (A-Z)</option>
+                        <option value="SortName-Descending">Name (Z-A)</option>
+                        <option value="DateCreated-Descending">Date Added (Newest)</option>
+                        <option value="DateCreated-Ascending">Date Added (Oldest)</option>
+                        <option value="PremiereDate-Descending">Release Date (Newest)</option>
+                        <option value="PremiereDate-Ascending">Release Date (Oldest)</option>
+                        <option value="CommunityRating-Descending">Rating (Highest)</option>
+                    </select>
                 </div>
             </div>
 
@@ -259,12 +255,20 @@
 
                 <!-- Search Input Display -->
                 <div class="search-input-container">
-                    <div id="search-input-display" class="search-input-display placeholder">Type to search...</div>
+                    <div id="search-input-display" class="search-input-display focusable placeholder" tabindex="0">Type to search...</div>
                 </div>
 
-                <!-- On-Screen Keyboard -->
-                <div id="search-keyboard" class="search-keyboard">
-                    <!-- Keyboard keys will be rendered here -->
+                <!-- Keyboard Modal -->
+                <div id="keyboard-modal" class="keyboard-modal hidden">
+                    <div class="keyboard-modal-backdrop"></div>
+                    <div class="keyboard-modal-content">
+                        <div class="keyboard-modal-header">
+                            <div id="keyboard-input-display" class="keyboard-input-display">Type to search...</div>
+                        </div>
+                        <div id="search-keyboard" class="search-keyboard">
+                            <!-- Keyboard keys will be rendered here -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Search Results -->
@@ -294,13 +298,6 @@
                         <div id="settings-account-info" class="settings-info">
                             <!-- Account info will be rendered here -->
                         </div>
-                        <div class="settings-actions">
-                            <button id="settings-logout-btn" class="settings-item focusable settings-item-danger" tabindex="0">
-                                <span class="settings-item-icon">🚪</span>
-                                <span class="settings-item-text">Log Out</span>
-                                <span class="settings-item-arrow">›</span>
-                            </button>
-                        </div>
                     </div>
 
                     <!-- Server Section -->
@@ -311,7 +308,7 @@
                         </div>
                         <div class="settings-actions">
                             <button id="settings-switch-server-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">🔄</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></span>
                                 <span class="settings-item-text">Switch Server</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -326,7 +323,7 @@
                         </div>
                         <div class="settings-actions">
                             <button id="settings-playback-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">▶️</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></span>
                                 <span class="settings-item-text">Playback Settings</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -341,7 +338,7 @@
                         </div>
                         <div class="settings-actions">
                             <button id="settings-subtitles-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">💬</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg></span>
                                 <span class="settings-item-text">Subtitle Settings</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -356,7 +353,7 @@
                         </div>
                         <div class="settings-actions">
                             <button id="settings-display-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">🖥️</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg></span>
                                 <span class="settings-item-text">Display Settings</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -371,7 +368,7 @@
                         </div>
                         <div class="settings-actions">
                             <button id="settings-plugins-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">🧩</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z"/></svg></span>
                                 <span class="settings-item-text">View All Plugins</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -386,7 +383,7 @@
                         </div>
                         <div class="settings-actions">
                             <button id="settings-jellyseerr-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">🎬</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg></span>
                                 <span class="settings-item-text">Configure Jellyseerr</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -398,7 +395,7 @@
                         <h2 class="settings-section-title">Storage</h2>
                         <div class="settings-actions">
                             <button id="settings-clear-cache-btn" class="settings-item focusable" tabindex="0">
-                                <span class="settings-item-icon">🗑️</span>
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></span>
                                 <span class="settings-item-text">Clear Cache</span>
                                 <span class="settings-item-arrow">›</span>
                             </button>
@@ -410,6 +407,17 @@
                         <h2 class="settings-section-title">About</h2>
                         <div id="settings-app-info" class="settings-info">
                             <!-- App info will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Logout Section (at bottom) -->
+                    <div class="settings-section settings-section-logout">
+                        <div class="settings-actions">
+                            <button id="settings-logout-btn" class="settings-item focusable settings-item-danger" tabindex="0">
+                                <span class="settings-item-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg></span>
+                                <span class="settings-item-text">Log Out</span>
+                                <span class="settings-item-arrow">›</span>
+                            </button>
                         </div>
                     </div>
                 </div>

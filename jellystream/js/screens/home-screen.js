@@ -288,10 +288,36 @@
             console.log('Media clicked:', item.Name || item.title, source);
 
             // Show details modal
-            if (window.ModalManager) {
-                window.ModalManager.showDetails(item, source);
-            } else {
+            if (!window.ModalManager) {
                 console.error('ModalManager not available');
+                return;
+            }
+
+            if (source === 'jellyfin') {
+                // Fetch full item details from Jellyfin before showing modal
+                window.JellyfinClient.getItem(item.Id)
+                    .then(function(fullItem) {
+                        console.log('HomeScreen: Full item loaded', fullItem);
+                        window.ModalManager.showDetails(fullItem, source);
+                    })
+                    .catch(function(error) {
+                        console.error('HomeScreen: Failed to load item details', error);
+                        window.ModalManager.showDetails(item, source);
+                    });
+            } else if (source === 'jellyseerr') {
+                // Fetch full details from Jellyseerr
+                var mediaType = item.mediaType || (item.title ? 'movie' : 'tv');
+                window.JellyseerrClient.getMediaDetails(mediaType, item.id)
+                    .then(function(fullItem) {
+                        console.log('HomeScreen: Full Jellyseerr item loaded', fullItem);
+                        window.ModalManager.showDetails(fullItem, source);
+                    })
+                    .catch(function(error) {
+                        console.error('HomeScreen: Failed to load Jellyseerr details', error);
+                        window.ModalManager.showDetails(item, source);
+                    });
+            } else {
+                window.ModalManager.showDetails(item, source);
             }
         },
 

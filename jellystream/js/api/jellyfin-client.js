@@ -402,14 +402,29 @@
         },
 
         /**
-         * Get item details
+         * Get item details (full details including trailers, overview, etc.)
          */
         getItem: function(itemId) {
             if (!this._userId) {
                 return Promise.reject(new Error('Not authenticated'));
             }
 
-            return this._request('/Users/' + this._userId + '/Items/' + itemId);
+            // Request all useful fields for full details view
+            var fields = [
+                'Overview',
+                'Genres',
+                'RemoteTrailers',
+                'People',
+                'Studios',
+                'ProductionLocations',
+                'ExternalUrls',
+                'ProviderIds',
+                'MediaSources',
+                'Chapters',
+                'Tags'
+            ].join(',');
+
+            return this._request('/Users/' + this._userId + '/Items/' + itemId + '?Fields=' + fields);
         },
 
         /**

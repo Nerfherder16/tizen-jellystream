@@ -237,9 +237,12 @@
                 mediaType: 'tv',
                 mediaId: tmdbId
             };
-            if (seasons) {
+            // Only add seasons if it's a non-empty array
+            // Omitting seasons = request all available seasons
+            if (Array.isArray(seasons) && seasons.length > 0) {
                 body.seasons = seasons;
             }
+            console.log('JellyseerrClient: TV request body', JSON.stringify(body));
             return this._request('/request', {
                 method: 'POST',
                 body: body

@@ -398,6 +398,7 @@
             var status = null;
             var mediaId = '';
             var mediaType = '';
+            var trailerKey = null;
 
             if (isJellyfin) {
                 // Jellyfin item
@@ -415,6 +416,23 @@
                 var serverUrl = window.StateManager.jellyfin.serverUrl;
                 if (mediaData.ImageTags && mediaData.ImageTags.Primary) {
                     posterUrl = serverUrl + '/Items/' + mediaData.Id + '/Images/Primary?maxWidth=400&quality=90';
+                }
+
+                // Check for trailer in Jellyfin RemoteTrailers
+                console.log('ModalManager: Jellyfin trailers', {
+                    RemoteTrailers: mediaData.RemoteTrailers,
+                    hasTrailers: !!(mediaData.RemoteTrailers && mediaData.RemoteTrailers.length > 0)
+                });
+
+                if (mediaData.RemoteTrailers && mediaData.RemoteTrailers.length > 0) {
+                    var youtubeTrailer = mediaData.RemoteTrailers.find(function(t) {
+                        return t.Url && t.Url.includes('youtube');
+                    });
+                    if (youtubeTrailer) {
+                        var match = youtubeTrailer.Url.match(/(?:v=|\/)([\w-]{11})/);
+                        if (match) trailerKey = match[1];
+                        console.log('ModalManager: Found Jellyfin trailer', youtubeTrailer.Url, 'key:', trailerKey);
+                    }
                 }
             } else {
                 // Jellyseerr/TMDb item
@@ -438,16 +456,81 @@
                 if (mediaData.posterPath) {
                     posterUrl = 'https://image.tmdb.org/t/p/w500' + mediaData.posterPath;
                 }
+
+                // Check for trailer in relatedVideos (Jellyseerr includes TMDb videos)
+                // Try multiple possible property names used by different Jellyseerr versions
+                var videoResults = null;
+                if (mediaData.relatedVideos && mediaData.relatedVideos.results) {
+                    videoResults = mediaData.relatedVideos.results;
+                } else if (mediaData.videos && mediaData.videos.results) {
+                    videoResults = mediaData.videos.results;
+                } else if (Array.isArray(mediaData.relatedVideos)) {
+                    videoResults = mediaData.relatedVideos;
+                } else if (Array.isArray(mediaData.videos)) {
+                    videoResults = mediaData.videos;
+                }
+
+                console.log('ModalManager: Video data', {
+                    relatedVideos: mediaData.relatedVideos,
+                    videos: mediaData.videos,
+                    videoResults: videoResults
+                });
+
+                if (videoResults && videoResults.length > 0) {
+                    var trailer = videoResults.find(function(v) {
+                        return v.type === 'Trailer' && v.site === 'YouTube';
+                    });
+                    // If no trailer type found, try getting any YouTube video
+                    if (!trailer) {
+                        trailer = videoResults.find(function(v) {
+                            return v.site === 'YouTube';
+                        });
+                    }
+                    if (trailer) {
+                        trailerKey = trailer.key;
+                    }
+                }
+            }
+
+            // Extract cast & crew
+            var cast = [];
+            var director = null;
+            if (isJellyfin) {
+                if (mediaData.People && mediaData.People.length > 0) {
+                    cast = mediaData.People.filter(function(p) { return p.Type === 'Actor'; }).slice(0, 8);
+                    var directorPerson = mediaData.People.find(function(p) { return p.Type === 'Director'; });
+                    if (directorPerson) director = directorPerson.Name;
+                }
+            } else {
+                if (mediaData.credits && mediaData.credits.cast) {
+                    cast = mediaData.credits.cast.slice(0, 8);
+                }
+                if (mediaData.credits && mediaData.credits.crew) {
+                    var directorCrew = mediaData.credits.crew.find(function(c) { return c.job === 'Director'; });
+                    if (directorCrew) director = directorCrew.name;
+                }
+            }
+
+            // Extract recommendations
+            var recommendations = [];
+            if (!isJellyfin && mediaData.recommendations && mediaData.recommendations.results) {
+                recommendations = mediaData.recommendations.results.slice(0, 6);
             }
 
             // Build HTML
-            var html = '<div class="details-modal">';
+            var html = '<div class="details-modal details-modal-expanded">';
 
-            // Poster
-            html += '<div class="details-poster" style="background-image: url(\'' + posterUrl + '\')"></div>';
+            // Left column - Poster
+            html += '<div class="details-left">';
+            html += '<div class="details-poster" style="background-image: url(\'' + posterUrl + '\')">';
+            if (trailerKey) {
+                html += '<button class="trailer-play-btn focusable" data-trailer-key="' + trailerKey + '" tabindex="0" title="Watch Trailer"></button>';
+            }
+            html += '</div>';
+            html += '</div>';
 
-            // Info section
-            html += '<div class="details-info">';
+            // Right column - Info
+            html += '<div class="details-right">';
             html += '<button class="btn-close focusable" id="modal-close-btn">&times;</button>';
             html += '<h2 class="details-title">' + this.escapeHtml(title) + '</h2>';
 
@@ -474,6 +557,11 @@
                 html += '</div>';
             }
 
+            // Director
+            if (director) {
+                html += '<p class="details-director"><span class="label">Director:</span> ' + this.escapeHtml(director) + '</p>';
+            }
+
             // Overview
             html += '<p class="details-overview">' + this.escapeHtml(overview) + '</p>';
 
@@ -484,12 +572,63 @@
                 html += '<button class="btn btn-play focusable" data-action="play" data-media-id="' + mediaId + '" data-media-type="' + mediaType + '" data-source="' + source + '">Play</button>';
             }
 
+            if (trailerKey) {
+                html += '<button class="btn btn-trailer focusable" data-action="trailer" data-trailer-key="' + trailerKey + '">Trailer</button>';
+            }
+
             if (!isJellyfin && status !== 'available' && status !== 'pending') {
                 html += '<button class="btn btn-request focusable" data-action="request" data-media-id="' + mediaId + '" data-media-type="' + mediaType + '">Request</button>';
             }
 
             html += '</div>'; // details-actions
-            html += '</div>'; // details-info
+
+            // Cast & Crew section
+            if (cast.length > 0) {
+                html += '<div class="details-cast">';
+                html += '<h3 class="details-section-title">Cast</h3>';
+                html += '<div class="cast-list">';
+                cast.forEach(function(person) {
+                    var name = person.Name || person.name;
+                    var character = person.Role || person.character || '';
+                    var profileUrl = '';
+                    if (isJellyfin && person.PrimaryImageTag) {
+                        profileUrl = window.StateManager.jellyfin.serverUrl + '/Items/' + person.Id + '/Images/Primary?maxWidth=80&quality=80';
+                    } else if (person.profilePath) {
+                        profileUrl = 'https://image.tmdb.org/t/p/w92' + person.profilePath;
+                    }
+                    html += '<div class="cast-item">';
+                    html += '<div class="cast-photo" style="background-image: url(\'' + profileUrl + '\')"></div>';
+                    html += '<div class="cast-info">';
+                    html += '<span class="cast-name">' + this.escapeHtml(name) + '</span>';
+                    if (character) {
+                        html += '<span class="cast-character">' + this.escapeHtml(character) + '</span>';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                }.bind(this));
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Recommendations section
+            if (recommendations.length > 0) {
+                html += '<div class="details-recommendations">';
+                html += '<h3 class="details-section-title">More Like This</h3>';
+                html += '<div class="recommendations-list">';
+                recommendations.forEach(function(rec) {
+                    var recTitle = rec.title || rec.name;
+                    var recPoster = rec.posterPath ? 'https://image.tmdb.org/t/p/w154' + rec.posterPath : '';
+                    var recType = rec.mediaType || (rec.title ? 'movie' : 'tv');
+                    html += '<div class="recommendation-item focusable" data-rec-id="' + rec.id + '" data-rec-type="' + recType + '" tabindex="0">';
+                    html += '<div class="recommendation-poster" style="background-image: url(\'' + recPoster + '\')"></div>';
+                    html += '<span class="recommendation-title">' + this.escapeHtml(recTitle) + '</span>';
+                    html += '</div>';
+                }.bind(this));
+                html += '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // details-right
             html += '</div>'; // details-modal
 
             return html;
@@ -540,6 +679,15 @@
                 });
             }
 
+            // Trailer buttons (both poster overlay and action button)
+            var trailerBtns = document.querySelectorAll('[data-action="trailer"], .trailer-play-btn');
+            trailerBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var trailerKey = this.dataset.trailerKey;
+                    self.playTrailer(trailerKey);
+                });
+            });
+
             // Request button
             var requestBtn = document.querySelector('[data-action="request"]');
             if (requestBtn) {
@@ -549,6 +697,59 @@
                     self.handleRequest(mediaId, mediaType);
                 });
             }
+        },
+
+        /**
+         * Play a YouTube trailer
+         */
+        playTrailer: function(videoKey) {
+            console.log('ModalManager: Playing trailer', videoKey);
+
+            if (!videoKey) return;
+
+            // Create trailer overlay with embedded YouTube player
+            var trailerHtml = '<div class="trailer-overlay" id="trailer-overlay">';
+            trailerHtml += '<button class="btn-close trailer-close focusable" id="trailer-close-btn">&times;</button>';
+            trailerHtml += '<div class="trailer-player-container">';
+            trailerHtml += '<iframe id="trailer-iframe" class="trailer-iframe" ';
+            trailerHtml += 'src="https://www.youtube.com/embed/' + videoKey + '?autoplay=1&rel=0&modestbranding=1&playsinline=1" ';
+            trailerHtml += 'frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>';
+            trailerHtml += '</div>';
+            trailerHtml += '</div>';
+
+            // Add to modal content
+            var contentEl = document.getElementById('modal-content');
+            if (contentEl) {
+                contentEl.insertAdjacentHTML('beforeend', trailerHtml);
+            }
+
+            // Bind close button
+            var closeBtn = document.getElementById('trailer-close-btn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    var overlay = document.getElementById('trailer-overlay');
+                    if (overlay) {
+                        overlay.remove();
+                    }
+                });
+
+                // Focus close button
+                if (window.FocusManager) {
+                    window.FocusManager.setFocus(closeBtn);
+                }
+            }
+
+            // Close on Escape
+            var escHandler = function(e) {
+                if (e.key === 'Escape') {
+                    var overlay = document.getElementById('trailer-overlay');
+                    if (overlay) {
+                        overlay.remove();
+                        document.removeEventListener('keydown', escHandler);
+                    }
+                }
+            };
+            document.addEventListener('keydown', escHandler);
         },
 
         /**
@@ -570,27 +771,274 @@
         handleRequest: function(mediaId, mediaType) {
             console.log('ModalManager: Request', mediaId, mediaType);
 
-            var requestBtn = document.querySelector('[data-action="request"]');
+            // For TV shows, show season selection modal
+            if (mediaType === 'tv') {
+                this.showSeasonSelection(mediaId);
+                return;
+            }
+
+            // For movies, request directly
+            this.submitRequest(mediaId, mediaType, null);
+        },
+
+        /**
+         * Show season selection modal for TV shows
+         */
+        showSeasonSelection: function(tmdbId) {
+            var self = this;
+            console.log('ModalManager: Loading seasons for TV show', tmdbId);
+
+            // Get TV show details to get seasons
+            window.JellyseerrClient.getTvShow(tmdbId)
+                .then(function(tvShow) {
+                    console.log('ModalManager: TV show loaded', tvShow);
+                    self.renderSeasonSelectionModal(tvShow);
+                })
+                .catch(function(error) {
+                    console.error('ModalManager: Failed to load TV show', error);
+                    alert('Failed to load show details');
+                });
+        },
+
+        /**
+         * Render season selection modal
+         */
+        renderSeasonSelectionModal: function(tvShow) {
+            var self = this;
+            var seasons = tvShow.seasons || [];
+
+            // Filter out season 0 (specials) unless it's the only season
+            var regularSeasons = seasons.filter(function(s) { return s.seasonNumber > 0; });
+            if (regularSeasons.length === 0) regularSeasons = seasons;
+
+            var html = '<div class="season-selection-modal">';
+            html += '<button class="btn-close focusable" id="season-modal-close">&times;</button>';
+            html += '<h2>Request ' + this.escapeHtml(tvShow.name || tvShow.title) + '</h2>';
+            html += '<p class="season-selection-hint">Select which seasons to request:</p>';
+
+            // All Seasons option
+            html += '<div class="season-options">';
+            html += '<label class="season-option season-option-all focusable" tabindex="0">';
+            html += '<input type="checkbox" id="select-all-seasons" value="all">';
+            html += '<span class="season-option-label">Request All Seasons</span>';
+            html += '</label>';
+
+            // Individual season options
+            regularSeasons.forEach(function(season) {
+                var isAvailable = season.status === 5;
+                var isRequested = season.status >= 2 && season.status < 5;
+                var statusClass = isAvailable ? 'season-available' : (isRequested ? 'season-requested' : '');
+                var statusText = isAvailable ? ' (Available)' : (isRequested ? ' (Requested)' : '');
+                var disabled = isAvailable || isRequested ? ' disabled' : '';
+
+                html += '<label class="season-option focusable ' + statusClass + '" tabindex="0">';
+                html += '<input type="checkbox" class="season-checkbox" value="' + season.seasonNumber + '"' + disabled + '>';
+                html += '<span class="season-option-label">';
+                html += 'Season ' + season.seasonNumber;
+                if (season.episodeCount) html += ' (' + season.episodeCount + ' episodes)';
+                html += statusText;
+                html += '</span>';
+                html += '</label>';
+            });
+            html += '</div>';
+
+            // Action buttons
+            html += '<div class="season-selection-actions">';
+            html += '<button class="btn btn-secondary focusable" id="season-cancel-btn">Cancel</button>';
+            html += '<button class="btn btn-request focusable" id="season-request-btn" disabled>Request Selected</button>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Store for later use
+            this.pendingTvRequest = {
+                tmdbId: tvShow.id,
+                name: tvShow.name || tvShow.title
+            };
+
+            // Update modal content
+            var contentEl = document.getElementById('modal-content');
+            if (contentEl) {
+                contentEl.innerHTML = html;
+            }
+
+            // Bind events
+            this.bindSeasonSelectionEvents();
+
+            // Focus first option
+            setTimeout(function() {
+                var firstOption = document.querySelector('.season-option.focusable');
+                if (firstOption && window.FocusManager) {
+                    window.FocusManager.setFocus(firstOption);
+                }
+            }, 100);
+        },
+
+        /**
+         * Bind season selection modal events
+         */
+        bindSeasonSelectionEvents: function() {
+            var self = this;
+
+            // Close button
+            var closeBtn = document.getElementById('season-modal-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    self.close();
+                });
+            }
+
+            // Cancel button
+            var cancelBtn = document.getElementById('season-cancel-btn');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', function() {
+                    self.close();
+                });
+            }
+
+            // Select all checkbox
+            var selectAllCheckbox = document.getElementById('select-all-seasons');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    var checked = this.checked;
+                    var seasonCheckboxes = document.querySelectorAll('.season-checkbox:not(:disabled)');
+                    seasonCheckboxes.forEach(function(cb) {
+                        cb.checked = checked;
+                    });
+                    self.updateRequestButtonState();
+                });
+            }
+
+            // Individual season checkboxes
+            var seasonCheckboxes = document.querySelectorAll('.season-checkbox');
+            seasonCheckboxes.forEach(function(cb) {
+                cb.addEventListener('change', function() {
+                    // Uncheck "all" if individual is unchecked
+                    if (!this.checked && selectAllCheckbox) {
+                        selectAllCheckbox.checked = false;
+                    }
+                    self.updateRequestButtonState();
+                });
+            });
+
+            // Season option labels (for keyboard/focus)
+            var seasonOptions = document.querySelectorAll('.season-option');
+            seasonOptions.forEach(function(option) {
+                option.addEventListener('click', function(e) {
+                    if (e.target.tagName !== 'INPUT') {
+                        var checkbox = this.querySelector('input[type="checkbox"]');
+                        if (checkbox && !checkbox.disabled) {
+                            checkbox.checked = !checkbox.checked;
+                            checkbox.dispatchEvent(new Event('change'));
+                        }
+                    }
+                });
+                option.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        var checkbox = this.querySelector('input[type="checkbox"]');
+                        if (checkbox && !checkbox.disabled) {
+                            checkbox.checked = !checkbox.checked;
+                            checkbox.dispatchEvent(new Event('change'));
+                        }
+                    }
+                });
+            });
+
+            // Request button
+            var requestBtn = document.getElementById('season-request-btn');
+            if (requestBtn) {
+                requestBtn.addEventListener('click', function() {
+                    self.submitSeasonRequest();
+                });
+            }
+        },
+
+        /**
+         * Update request button enabled state
+         */
+        updateRequestButtonState: function() {
+            var requestBtn = document.getElementById('season-request-btn');
+            if (!requestBtn) return;
+
+            var selectAll = document.getElementById('select-all-seasons');
+            var seasonCheckboxes = document.querySelectorAll('.season-checkbox:checked');
+
+            var hasSelection = (selectAll && selectAll.checked) || seasonCheckboxes.length > 0;
+            requestBtn.disabled = !hasSelection;
+        },
+
+        /**
+         * Submit the season request
+         */
+        submitSeasonRequest: function() {
+            var self = this;
+            var selectAll = document.getElementById('select-all-seasons');
+            var seasonCheckboxes = document.querySelectorAll('.season-checkbox:checked');
+
+            var seasons = [];
+            if (selectAll && selectAll.checked) {
+                // Request all seasons - pass 'all' indicator
+                seasons = 'all';
+            } else {
+                // Get selected season numbers
+                seasonCheckboxes.forEach(function(cb) {
+                    seasons.push(parseInt(cb.value, 10));
+                });
+            }
+
+            if (!this.pendingTvRequest) {
+                console.error('ModalManager: No pending TV request');
+                return;
+            }
+
+            this.submitRequest(this.pendingTvRequest.tmdbId, 'tv', seasons);
+        },
+
+        /**
+         * Submit the actual request to Jellyseerr
+         */
+        submitRequest: function(mediaId, mediaType, seasons) {
+            var self = this;
+            console.log('ModalManager: Submitting request', mediaId, mediaType, seasons);
+
+            var requestBtn = document.querySelector('[data-action="request"]') || document.getElementById('season-request-btn');
             if (requestBtn) {
                 requestBtn.textContent = 'Requesting...';
                 requestBtn.disabled = true;
             }
 
-            window.JellyseerrClient.requestMedia(mediaType, parseInt(mediaId))
+            // Prepare seasons array for API
+            // When seasons is 'all' or null/undefined, don't pass seasons (requests all)
+            // When seasons is an array of numbers, pass it to request specific seasons
+            var seasonsParam = null;
+            if (mediaType === 'tv' && Array.isArray(seasons) && seasons.length > 0) {
+                seasonsParam = seasons;
+            }
+
+            console.log('ModalManager: Final request params', { mediaId: mediaId, mediaType: mediaType, seasons: seasonsParam });
+
+            window.JellyseerrClient.requestMedia(mediaType, parseInt(mediaId), seasonsParam)
                 .then(function(result) {
                     console.log('ModalManager: Request successful', result);
+
                     if (requestBtn) {
                         requestBtn.textContent = 'Requested!';
                         requestBtn.classList.remove('btn-request');
                         requestBtn.classList.add('btn-secondary');
                     }
 
-                    // Update status badge
+                    // Update status badge if visible
                     var badge = document.querySelector('.status-badge');
                     if (badge) {
                         badge.textContent = 'Requested';
                         badge.className = 'status-badge status-pending';
                     }
+
+                    // Show success message and close after delay
+                    setTimeout(function() {
+                        self.close();
+                    }, 1500);
                 })
                 .catch(function(error) {
                     console.error('ModalManager: Request failed', error);

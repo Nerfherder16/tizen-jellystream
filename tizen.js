@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    console.log('Tizen adapter');
+    console.log('JellyStream - Tizen adapter');
 
     // Similar to jellyfin-web
     function generateDeviceId() {
@@ -24,7 +24,7 @@
     var AppInfo = {
         deviceId: getDeviceId(),
         deviceName: 'Samsung Smart TV',
-        appName: 'Jellyfin for Tizen',
+        appName: 'JellyStream',
         appVersion: tizen.application.getCurrentApplication().appInfo.version
     };
 
@@ -121,7 +121,12 @@
 
             getDeviceProfile: function (profileBuilder) {
                 postMessage('AppHost.getDeviceProfile');
-                return profileBuilder({ enableMkvProgressive: false, enableSsaRender: true });
+                // Enable MKV progressive for better 4K direct play support
+                // enableSsaRender: true allows subtitle burn-in
+                return profileBuilder({
+                    enableMkvProgressive: true,  // Better for 4K MKV files
+                    enableSsaRender: true
+                });
             },
 
             getSyncProfile: function (profileBuilder) {

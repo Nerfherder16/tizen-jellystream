@@ -13,6 +13,9 @@ console.info('Using jellyfin-web from', WEB_DIR);
 
 const DISCARD_UNUSED_FONTS = !!process.env.DISCARD_UNUSED_FONTS;
 
+// JellyStream integration paths
+const JELLYSTREAM_DIR = path.resolve('jellystream');
+
 const paths = {
     assets: {
         src: [
@@ -59,6 +62,13 @@ function searchFonts() {
 function copy() {
     return gulp.src(paths.assets.src, { encoding: false })
         .pipe(gulp.dest(paths.assets.dest));
+}
+
+// Copy JellyStream files
+function copyJellyStream() {
+    console.info('Copying JellyStream files from', JELLYSTREAM_DIR);
+    return gulp.src(JELLYSTREAM_DIR + '/**/*', { encoding: false })
+        .pipe(gulp.dest('www/jellystream/'));
 }
 
 // Add required tags to index.html
@@ -113,6 +123,30 @@ function modifyIndex() {
             tizen.setAttribute('defer', '');
             injectTarget.insertBefore(tizen, apploader);
 
+            // === JellyStream Injection ===
+            console.debug('Injecting JellyStream modules');
+
+            // inject JellyStream CSS
+            const jellystreamCss = this.createElement('link');
+            jellystreamCss.setAttribute('rel', 'stylesheet');
+            jellystreamCss.setAttribute('href', 'jellystream/jellystream.css');
+            this.head.appendChild(jellystreamCss);
+
+            // inject JellyStream scripts (in dependency order)
+            const jellystreamScripts = [
+                'jellystream/jellyseerr-api.js',
+                'jellystream/jellystream-config.js',
+                'jellystream/jellystream-home.js',
+                'jellystream/jellystream.js'
+            ];
+
+            jellystreamScripts.forEach(scriptPath => {
+                const script = this.createElement('script');
+                script.setAttribute('src', scriptPath);
+                script.setAttribute('defer', '');
+                injectTarget.insertBefore(script, apploader);
+            });
+
             return this;
         }))
         .pipe(gulp.dest(paths.index.dest))
@@ -122,13 +156,14 @@ function modifyIndex() {
 const build = gulp.series(
     clean,
     searchFonts,
-    gulp.parallel(copy, modifyIndex)
+    gulp.parallel(copy, copyJellyStream, modifyIndex)
 );
 
 // Export tasks so they can be run individually
 export {
     clean,
     copy,
+    copyJellyStream,
     modifyIndex
 };
 // Export default task

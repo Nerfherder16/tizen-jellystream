@@ -12,6 +12,9 @@
         currentCategory: 'trending',
         isLoading: false,
         selectedNetwork: null,
+        currentPage: 1,
+        totalPages: 1,
+        currentItems: [],
 
         // Movie categories
         movieCategories: {
@@ -109,12 +112,16 @@
             var container = document.getElementById('discover-sections');
             if (!container) return;
 
+            // Clean SVG icons for Movies and TV
+            var movieIcon = '<svg class="section-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>';
+            var tvIcon = '<svg class="section-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>';
+
             var html = '';
             html += '<button class="discover-section-tab focusable' + (this.currentSection === 'movies' ? ' active' : '') + '" data-section="movies" tabindex="0">';
-            html += '<span class="section-icon">🎬</span> Movies';
+            html += movieIcon + ' Movies';
             html += '</button>';
             html += '<button class="discover-section-tab focusable' + (this.currentSection === 'tv' ? ' active' : '') + '" data-section="tv" tabindex="0">';
-            html += '<span class="section-icon">📺</span> TV Shows';
+            html += tvIcon + ' TV Shows';
             html += '</button>';
 
             container.innerHTML = html;
@@ -151,6 +158,9 @@
             this.currentSection = section;
             this.currentCategory = 'trending'; // Reset to trending
             this.selectedNetwork = null;
+            this.currentPage = 1;
+            this.totalPages = 1;
+            this.currentItems = [];
 
             // Update section tab active states
             var sectionTabs = document.querySelectorAll('.discover-section-tab');
@@ -175,6 +185,9 @@
 
             this.currentCategory = category;
             this.selectedNetwork = null;
+            this.currentPage = 1;
+            this.totalPages = 1;
+            this.currentItems = [];
 
             // Update tab active states
             var tabs = document.querySelectorAll('.discover-tab');
@@ -200,14 +213,26 @@
         /**
          * Load trending movies
          */
-        loadTrendingMovies: function() {
+        loadTrendingMovies: function(append) {
             var self = this;
-            this.showLoading(true);
+            this.showLoading(true, append);
+
+            var page = append ? this.currentPage + 1 : 1;
 
             // Use /discover/movies which returns trending movies
-            window.JellyseerrClient.getTrendingMovies()
+            window.JellyseerrClient.getTrendingMovies(page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'movie');
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'movie', null, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
@@ -220,22 +245,44 @@
         /**
          * Load popular movies
          */
-        loadPopularMovies: function() {
+        loadPopularMovies: function(append) {
             var self = this;
-            this.showLoading(true);
+            this.showLoading(true, append);
+
+            var page = append ? this.currentPage + 1 : 1;
 
             // Try popular endpoint, fall back to discover/movies
-            window.JellyseerrClient.getPopularMovies()
+            window.JellyseerrClient.getPopularMovies(page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'movie');
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'movie', null, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
                     console.error('Discover: Popular movies failed, trying discover', error);
                     // Fallback to regular discover which shows popular by default
-                    window.JellyseerrClient.getTrendingMovies()
+                    window.JellyseerrClient.getTrendingMovies(page)
                         .then(function(response) {
-                            self.renderGrid(response.results || [], 'movie');
+                            self.currentPage = response.page || page;
+                            self.totalPages = response.totalPages || 1;
+                            var items = response.results || [];
+
+                            if (append) {
+                                self.currentItems = self.currentItems.concat(items);
+                            } else {
+                                self.currentItems = items;
+                            }
+
+                            self.renderGrid(self.currentItems, 'movie', null, append);
                             self.showLoading(false);
                         })
                         .catch(function(err) {
@@ -248,13 +295,25 @@
         /**
          * Load upcoming movies
          */
-        loadUpcomingMovies: function() {
+        loadUpcomingMovies: function(append) {
             var self = this;
-            this.showLoading(true);
+            this.showLoading(true, append);
 
-            window.JellyseerrClient.getUpcomingMovies()
+            var page = append ? this.currentPage + 1 : 1;
+
+            window.JellyseerrClient.getUpcomingMovies(page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'movie');
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'movie', null, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
@@ -267,14 +326,26 @@
         /**
          * Load trending TV
          */
-        loadTrendingTv: function() {
+        loadTrendingTv: function(append) {
             var self = this;
-            this.showLoading(true);
+            this.showLoading(true, append);
+
+            var page = append ? this.currentPage + 1 : 1;
 
             // Use /discover/tv which returns trending TV
-            window.JellyseerrClient.getTrendingTv()
+            window.JellyseerrClient.getTrendingTv(page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'tv');
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'tv', null, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
@@ -287,21 +358,43 @@
         /**
          * Load popular TV
          */
-        loadPopularTv: function() {
+        loadPopularTv: function(append) {
             var self = this;
-            this.showLoading(true);
+            this.showLoading(true, append);
+
+            var page = append ? this.currentPage + 1 : 1;
 
             // Try popular endpoint, fall back to discover/tv
-            window.JellyseerrClient.getPopularTv()
+            window.JellyseerrClient.getPopularTv(page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'tv');
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'tv', null, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
                     console.error('Discover: Popular TV failed, trying discover', error);
-                    window.JellyseerrClient.getTrendingTv()
+                    window.JellyseerrClient.getTrendingTv(page)
                         .then(function(response) {
-                            self.renderGrid(response.results || [], 'tv');
+                            self.currentPage = response.page || page;
+                            self.totalPages = response.totalPages || 1;
+                            var items = response.results || [];
+
+                            if (append) {
+                                self.currentItems = self.currentItems.concat(items);
+                            } else {
+                                self.currentItems = items;
+                            }
+
+                            self.renderGrid(self.currentItems, 'tv', null, append);
                             self.showLoading(false);
                         })
                         .catch(function(err) {
@@ -314,13 +407,25 @@
         /**
          * Load upcoming TV
          */
-        loadUpcomingTv: function() {
+        loadUpcomingTv: function(append) {
             var self = this;
-            this.showLoading(true);
+            this.showLoading(true, append);
 
-            window.JellyseerrClient.getUpcomingTv()
+            var page = append ? this.currentPage + 1 : 1;
+
+            window.JellyseerrClient.getUpcomingTv(page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'tv');
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'tv', null, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
@@ -433,14 +538,32 @@
         /**
          * Load shows for a specific network
          */
-        loadNetworkShows: function(networkId, networkName) {
+        loadNetworkShows: function(networkId, networkName, append) {
             var self = this;
-            this.showLoading(true);
-            this.selectedNetwork = { id: networkId, name: networkName };
+            this.showLoading(true, append);
 
-            window.JellyseerrClient.getTvByNetwork(networkId)
+            if (!append) {
+                this.selectedNetwork = { id: networkId, name: networkName };
+                this.currentPage = 1;
+                this.totalPages = 1;
+                this.currentItems = [];
+            }
+
+            var page = append ? this.currentPage + 1 : 1;
+
+            window.JellyseerrClient.getTvByNetwork(networkId, page)
                 .then(function(response) {
-                    self.renderGrid(response.results || [], 'tv', networkName);
+                    self.currentPage = response.page || page;
+                    self.totalPages = response.totalPages || 1;
+                    var items = response.results || [];
+
+                    if (append) {
+                        self.currentItems = self.currentItems.concat(items);
+                    } else {
+                        self.currentItems = items;
+                    }
+
+                    self.renderGrid(self.currentItems, 'tv', networkName, append);
                     self.showLoading(false);
                 })
                 .catch(function(error) {
@@ -451,9 +574,28 @@
         },
 
         /**
+         * Load more items for current category
+         */
+        loadMore: function() {
+            if (this.isLoading || this.currentPage >= this.totalPages) return;
+
+            // Check if we're viewing a network
+            if (this.selectedNetwork) {
+                this.loadNetworkShows(this.selectedNetwork.id, this.selectedNetwork.name, true);
+                return;
+            }
+
+            var categories = this.currentSection === 'movies' ? this.movieCategories : this.tvCategories;
+            var loaderName = categories[this.currentCategory].loader;
+            if (this[loaderName]) {
+                this[loaderName](true); // Pass true for append mode
+            }
+        },
+
+        /**
          * Render content grid
          */
-        renderGrid: function(items, mediaType, subtitle) {
+        renderGrid: function(items, mediaType, subtitle, isAppend) {
             var container = document.getElementById('discover-grid');
             if (!container) return;
 
@@ -477,16 +619,39 @@
                 html += this.createCard(item, mediaType);
             }.bind(this));
 
+            // Add Load More button if there are more pages
+            if (this.currentPage < this.totalPages) {
+                html += '<div class="discover-load-more-container">';
+                html += '<button class="discover-load-more-btn focusable" id="discover-load-more-btn" tabindex="0">';
+                html += 'Load More (Page ' + this.currentPage + ' of ' + this.totalPages + ')';
+                html += '</button>';
+                html += '</div>';
+            }
+
             container.innerHTML = html;
 
             // Bind card events
             this.bindCardEvents();
             this.bindBackButton();
+            this.bindLoadMoreButton();
 
             // Update count
             var countEl = document.getElementById('discover-count');
             if (countEl) {
                 countEl.textContent = items.length + ' items';
+            }
+        },
+
+        /**
+         * Bind load more button event
+         */
+        bindLoadMoreButton: function() {
+            var self = this;
+            var loadMoreBtn = document.getElementById('discover-load-more-btn');
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', function() {
+                    self.loadMore();
+                });
             }
         },
 
@@ -758,7 +923,7 @@
         /**
          * Show loading state
          */
-        showLoading: function(show) {
+        showLoading: function(show, isAppend) {
             this.isLoading = show;
             var loader = document.getElementById('discover-loading');
             if (loader) {
@@ -766,8 +931,17 @@
             }
 
             var grid = document.getElementById('discover-grid');
-            if (grid && show) {
+            if (grid && show && !isAppend) {
                 grid.innerHTML = '';
+            }
+
+            // Update Load More button text if loading more
+            if (isAppend && show) {
+                var loadMoreBtn = document.getElementById('discover-load-more-btn');
+                if (loadMoreBtn) {
+                    loadMoreBtn.textContent = 'Loading...';
+                    loadMoreBtn.disabled = true;
+                }
             }
         },
 

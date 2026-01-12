@@ -405,10 +405,22 @@
         handleCardClick: function(item) {
             console.log('LibraryScreen: Card clicked', item.Name, item.Type);
 
-            // Show details modal
-            if (window.ModalManager) {
-                window.ModalManager.showDetails(item, 'jellyfin');
-            }
+            // Fetch full item details including Overview and RemoteTrailers
+            var self = this;
+            window.JellyfinClient.getItem(item.Id)
+                .then(function(fullItem) {
+                    console.log('LibraryScreen: Full item loaded', fullItem);
+                    if (window.ModalManager) {
+                        window.ModalManager.showDetails(fullItem, 'jellyfin');
+                    }
+                })
+                .catch(function(error) {
+                    console.error('LibraryScreen: Failed to load item details', error);
+                    // Fall back to basic item data
+                    if (window.ModalManager) {
+                        window.ModalManager.showDetails(item, 'jellyfin');
+                    }
+                });
         },
 
         /**
@@ -436,13 +448,10 @@
         },
 
         /**
-         * Update item count display
+         * Update item count display (disabled - count removed from UI)
          */
         updateItemCount: function() {
-            var countEl = document.getElementById('library-count');
-            if (countEl) {
-                countEl.textContent = this.currentItems.length + ' of ' + this.totalItems + ' items';
-            }
+            // Count display removed from UI
         },
 
         /**
