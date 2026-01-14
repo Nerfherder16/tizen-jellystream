@@ -123,6 +123,20 @@
                             throw new Error(errorMsg);
                         });
                     }
+                    // Handle empty responses (some endpoints return 204 No Content or empty body)
+                    var contentType = response.headers.get('content-type');
+                    if (response.status === 204 || !contentType || !contentType.includes('application/json')) {
+                        return response.text().then(function(text) {
+                            if (!text || text.trim() === '') {
+                                return {}; // Return empty object for empty responses
+                            }
+                            try {
+                                return JSON.parse(text);
+                            } catch (e) {
+                                return {}; // Return empty object if not valid JSON
+                            }
+                        });
+                    }
                     return response.json();
                 })
                 .catch(function(error) {
@@ -421,7 +435,9 @@
                 'ProviderIds',
                 'MediaSources',
                 'Chapters',
-                'Tags'
+                'Tags',
+                'ParentId',
+                'Path'
             ].join(',');
 
             return this._request('/Users/' + this._userId + '/Items/' + itemId + '?Fields=' + fields);

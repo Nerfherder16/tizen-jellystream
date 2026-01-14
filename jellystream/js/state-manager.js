@@ -154,9 +154,24 @@
             this.jellyfin.accessToken = null;
             this.jellyfin.userId = null;
             this.jellyfin.userName = null;
+            this.jellyfin.serverUrl = null;
+            this.jellyfin.deviceId = null;
+            this.jellyfin.serverId = null;
             this.jellyseerr.connected = false;
+            this.jellyseerr.serverUrl = null;
+            this.jellyseerr.apiKey = null;
             this.saveToStorage();
-            console.log('StateManager: Auth cleared');
+            console.log('StateManager: Auth cleared completely');
+        },
+
+        /**
+         * Full reset - clear everything including localStorage
+         */
+        fullReset: function() {
+            localStorage.removeItem('jellystream_state');
+            console.log('StateManager: Full reset - localStorage cleared');
+            // Reload page to start fresh
+            location.reload();
         },
 
         /**

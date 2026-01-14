@@ -129,6 +129,11 @@
          * Get screen module by ID
          */
         getScreenModule: function(screenId) {
+            // Special case: SplashScreen is reserved on Tizen, use AppSplashScreen
+            if (screenId === 'splash-screen') {
+                return window.AppSplashScreen;
+            }
+
             // Convert screen-id to ScreenId format
             var moduleName = screenId
                 .split('-')

@@ -8,7 +8,7 @@ console.log('splash-screen.js: FILE LOADING');
 
     console.log('splash-screen.js: IIFE executing');
 
-    var SplashScreen = {
+    var AppSplashScreen = {
         initialized: false,
 
         /**
@@ -17,7 +17,7 @@ console.log('splash-screen.js: FILE LOADING');
         init: function() {
             if (this.initialized) return;
 
-            console.log('SplashScreen: Initializing');
+            console.log('AppSplashScreen: Initializing');
             this.initialized = true;
 
             // Auto-transition after checking auth
@@ -45,7 +45,7 @@ console.log('splash-screen.js: FILE LOADING');
          * Check authentication and transition to appropriate screen
          */
         checkAuthAndTransition: function() {
-            console.log('SplashScreen: Checking authentication');
+            console.log('AppSplashScreen: Checking authentication');
             this.updateMessage('Checking auth...');
 
             // Check if we have valid saved credentials
@@ -56,7 +56,7 @@ console.log('splash-screen.js: FILE LOADING');
                 var userId = window.StateManager.jellyfin.userId;
 
                 if (token && userId) {
-                    console.log('SplashScreen: Found saved credentials, validating...');
+                    console.log('AppSplashScreen: Found saved credentials, validating...');
                     this.updateMessage('Validating credentials...');
 
                     // Initialize client with saved credentials
@@ -71,7 +71,7 @@ console.log('splash-screen.js: FILE LOADING');
                     // Test if token is still valid
                     window.JellyfinClient._request('/Users/' + userId)
                         .then(function(user) {
-                            console.log('SplashScreen: Token valid, user:', user.Name);
+                            console.log('AppSplashScreen: Token valid, user:', user.Name);
                             this.updateMessage('Welcome back, ' + user.Name + '!');
 
                             // Also initialize Jellyseerr if we have it
@@ -89,7 +89,7 @@ console.log('splash-screen.js: FILE LOADING');
                             }, 500);
                         }.bind(this))
                         .catch(function(error) {
-                            console.log('SplashScreen: Token invalid or expired, redirecting to login');
+                            console.log('AppSplashScreen: Token invalid or expired, redirecting to login');
                             this.goToLogin();
                         }.bind(this));
 
@@ -98,7 +98,7 @@ console.log('splash-screen.js: FILE LOADING');
             }
 
             // No valid auth, go to login
-            console.log('SplashScreen: No valid credentials found');
+            console.log('AppSplashScreen: No valid credentials found');
             this.updateMessage('No saved login, redirecting...');
             this.goToLogin();
         },
@@ -110,18 +110,26 @@ console.log('splash-screen.js: FILE LOADING');
             this.updateMessage('Redirecting to login...');
             setTimeout(function() {
                 if (window.Router) {
-                    console.log('SplashScreen: Navigating to login');
+                    console.log('AppSplashScreen: Navigating to login');
                     window.Router.navigateTo('#/login');
                 } else {
-                    console.error('SplashScreen: Router not available!');
+                    console.error('AppSplashScreen: Router not available!');
                 }
             }, 500);
         }
     };
 
     // Export to global scope
-    window.SplashScreen = SplashScreen;
-    console.log('splash-screen.js: SplashScreen exported to window');
+    console.log('splash-screen.js: AppSplashScreen before export has keys:', Object.keys(AppSplashScreen));
+    console.log('splash-screen.js: window.AppSplashScreen exists before assignment?', 'AppSplashScreen' in window, window.AppSplashScreen);
+    console.log('splash-screen.js: Is window.AppSplashScreen frozen?', Object.isFrozen(window.AppSplashScreen || {}));
+
+    // Try alternative export method
+    window['AppSplashScreen'] = AppSplashScreen;
+
+    console.log('splash-screen.js: AppSplashScreen exported to window');
+    console.log('splash-screen.js: window.AppSplashScreen has keys:', Object.keys(window.AppSplashScreen));
+    console.log('splash-screen.js: window.AppSplashScreen.init exists?', typeof window.AppSplashScreen.init);
 
 })(window);
 console.log('splash-screen.js: FILE COMPLETE');

@@ -10,19 +10,30 @@
         isInitialized: false,
 
         /**
+         * Update splash message for debugging
+         */
+        updateSplashDebug: function(msg) {
+            var el = document.querySelector('.splash-message');
+            if (el) el.textContent = msg;
+        },
+
+        /**
          * Initialize the application
          */
         init: function() {
             console.log('JellyStream ' + this.version + ': Starting...');
+            this.updateSplashDebug('Starting v' + this.version + '...');
 
             // Check if all dependencies are loaded
             if (!this.checkDependencies()) {
                 console.error('JellyStream: Missing dependencies, retrying in 500ms...');
+                this.updateSplashDebug('Waiting for dependencies...');
                 setTimeout(this.init.bind(this), 500);
                 return;
             }
 
             console.log('JellyStream: All dependencies loaded');
+            this.updateSplashDebug('Dependencies loaded, initializing...');
 
             // Initialize lifecycle manager
             if (window.AppLifecycle) {
@@ -48,6 +59,7 @@
             for (var i = 0; i < required.length; i++) {
                 if (!window[required[i]]) {
                     console.error('JellyStream: Missing dependency: ' + required[i]);
+                    this.updateSplashDebug('Missing: ' + required[i]);
                     return false;
                 }
             }

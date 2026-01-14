@@ -2,3 +2,13 @@
 www
 .*
 node_modules
+
+tmpclaude-*
+nul
+dist/
+jellystream-build/
+jellystream-clean/
+wgt-contents/
+author-signature.xml
+signature1.xml
+streamyfin-*/
