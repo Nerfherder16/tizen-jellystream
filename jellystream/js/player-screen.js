@@ -42,6 +42,7 @@
         currentAudioIndex: 0,
         currentSubtitleIndex: -1, // -1 means no subtitles
         tracksMenuVisible: false,
+        subtitleBlobUrl: null, // Track blob URL for cleanup
 
         // Settings state
         settingsMenuVisible: false,
@@ -119,14 +120,27 @@
                     // Store full item data for pause overlay
                     self.mediaItem = item;
 
-                    // Set the title
+                    // Set the title and subtitle
                     var title = item.Name || 'Unknown';
+                    var subtitle = '';
+
                     if (item.Type === 'Episode' && item.SeriesName) {
-                        title = item.SeriesName + ' - ' + title;
+                        title = item.SeriesName;
+                        subtitle = 'S' + (item.ParentIndexNumber || 1) + 'E' + (item.IndexNumber || 1);
+                        if (item.Name) {
+                            subtitle += ' · ' + item.Name;
+                        }
+                    } else if (item.Type === 'Movie' && item.ProductionYear) {
+                        subtitle = item.ProductionYear;
                     }
+
                     var titleEl = document.getElementById('player-title');
+                    var subtitleEl = document.getElementById('player-subtitle');
                     if (titleEl) {
                         titleEl.textContent = title;
+                    }
+                    if (subtitleEl) {
+                        subtitleEl.textContent = subtitle;
                     }
 
                     // Store resume position from item data
@@ -569,9 +583,16 @@
                 .then(function(vttContent) {
                     console.log('PlayerScreen: Subtitle fetched, length:', vttContent.length);
 
+                    // Revoke old blob URL to prevent memory leak
+                    if (self.subtitleBlobUrl) {
+                        URL.revokeObjectURL(self.subtitleBlobUrl);
+                        self.subtitleBlobUrl = null;
+                    }
+
                     // Create blob URL from the VTT content
                     var blob = new Blob([vttContent], { type: 'text/vtt' });
                     var blobUrl = URL.createObjectURL(blob);
+                    self.subtitleBlobUrl = blobUrl; // Store for cleanup
 
                     var track = document.createElement('track');
                     track.kind = 'captions';
@@ -638,26 +659,50 @@
             var accessToken = window.StateManager.jellyfin.accessToken;
             var container = mediaSource.Container || 'mp4';
 
-            // If quality is auto or max, use direct stream
-            if (this.currentQuality === 'auto' || this.currentQuality >= 120000000) {
-                // Direct stream URL (works for most formats on Tizen/browsers)
-                return baseUrl + '/Videos/' + mediaId + '/stream' +
-                    '?static=true' +
-                    '&mediaSourceId=' + mediaSource.Id +
-                    '&api_key=' + accessToken;
+            // Find the default audio stream index
+            var audioStreamIndex = -1;
+            var firstAudioIndex = -1;
+            if (mediaSource.MediaStreams) {
+                for (var i = 0; i < mediaSource.MediaStreams.length; i++) {
+                    var stream = mediaSource.MediaStreams[i];
+                    if (stream.Type === 'Audio') {
+                        // Track first audio stream as fallback
+                        if (firstAudioIndex === -1) {
+                            firstAudioIndex = stream.Index;
+                        }
+                        if (stream.IsDefault) {
+                            audioStreamIndex = stream.Index;
+                            break;
+                        }
+                    }
+                }
             }
+            // Use first audio track if no default found
+            if (audioStreamIndex === -1) {
+                audioStreamIndex = firstAudioIndex !== -1 ? firstAudioIndex : 0;
+            }
+            console.log('PlayerScreen: Selected audio stream index:', audioStreamIndex);
 
-            // Use transcoded stream with bitrate limit
-            var url = baseUrl + '/Videos/' + mediaId + '/stream' +
+            // Use HLS streaming for better Tizen TV compatibility
+            var deviceId = window.StateManager.jellyfin.deviceId || 'JellyStream';
+            var maxBitrate = this.currentQuality === 'auto' ? 120000000 : this.currentQuality;
+
+            var url = baseUrl + '/Videos/' + mediaId + '/master.m3u8' +
                 '?mediaSourceId=' + mediaSource.Id +
                 '&api_key=' + accessToken +
-                '&maxStreamingBitrate=' + this.currentQuality +
+                '&audioStreamIndex=' + audioStreamIndex +
+                '&deviceId=' + deviceId +
+                '&videoBitrate=' + maxBitrate +
                 '&audioBitrate=384000' +
+                '&maxAudioChannels=6' +
                 '&videoCodec=h264' +
-                '&audioCodec=aac' +
-                '&container=ts';
+                '&audioCodec=aac,mp3' +
+                '&transcodingMaxAudioChannels=6' +
+                '&requireAvc=true' +
+                '&subtitleMethod=Encode' +
+                '&playSessionId=' + (this.playSessionId || '');
 
-            console.log('PlayerScreen: Using transcoded stream with bitrate', this.currentQuality);
+            console.log('PlayerScreen: Using HLS stream URL:', url);
             return url;
         },
 
@@ -670,10 +715,21 @@
 
             video.addEventListener('loadedmetadata', function() {
                 console.log('PlayerScreen: Metadata loaded, duration:', video.duration);
+                console.log('PlayerScreen: Video muted:', video.muted, 'volume:', video.volume);
+                // Ensure audio is not muted and volume is set
+                if (video.muted) {
+                    video.muted = false;
+                    console.log('PlayerScreen: Unmuted video');
+                }
+                if (video.volume < 0.5) {
+                    video.volume = 1.0;
+                    console.log('PlayerScreen: Set volume to 1.0');
+                }
                 self.duration = video.duration;
                 self.updateDurationDisplay();
                 self.updateRatingDisplay();
                 self.updateFavoriteButton();
+                self.updateVolumeUI();
                 self.showLoading(false);
             });
 
@@ -722,12 +778,11 @@
                 self.stopProgressReporting();
                 self.reportPlaybackStopped();
 
-                // Go back to previous screen
-                setTimeout(function() {
-                    if (window.Router) {
-                        window.Router.goBack();
-                    }
-                }, 1000);
+                // Auto-scrobble to Trakt if connected
+                self.autoScrobbleToTrakt();
+
+                // Handle auto-play next episode
+                self.handlePlaybackEnded();
             });
 
             video.addEventListener('error', function(e) {
@@ -770,6 +825,7 @@
         bindControlButtons: function() {
             var self = this;
 
+            var backBtn = document.getElementById('player-back-btn');
             var playPauseBtn = document.getElementById('play-pause-btn');
             var rewindBtn = document.getElementById('rewind-btn');
             var forwardBtn = document.getElementById('forward-btn');
@@ -779,6 +835,13 @@
             var volumeSlider = document.getElementById('volume-slider');
             var settingsBtn = document.getElementById('settings-btn');
             var fullscreenBtn = document.getElementById('fullscreen-btn');
+
+            // Back button - stop playback and return to home
+            if (backBtn) {
+                backBtn.addEventListener('click', function() {
+                    self.exitPlayer();
+                });
+            }
 
             if (playPauseBtn) {
                 playPauseBtn.addEventListener('click', function() {
@@ -986,11 +1049,47 @@
                 this.videoElement.src = '';
             }
 
+            // Clean up subtitle blob URL to prevent memory leak
+            if (this.subtitleBlobUrl) {
+                URL.revokeObjectURL(this.subtitleBlobUrl);
+                this.subtitleBlobUrl = null;
+            }
+
             this.isPlaying = false;
             this.isPaused = false;
 
             if (window.Router) {
                 window.Router.goBack();
+            }
+        },
+
+        /**
+         * Exit player and go to home screen
+         */
+        exitPlayer: function() {
+            console.log('PlayerScreen: Exiting to home');
+
+            this.reportPlaybackStopped();
+            this.stopProgressReporting();
+
+            // Clear pause overlay timeout
+            if (this.pauseOverlayTimeout) {
+                clearTimeout(this.pauseOverlayTimeout);
+                this.pauseOverlayTimeout = null;
+            }
+            this.hidePauseOverlay();
+
+            if (this.videoElement) {
+                this.videoElement.pause();
+                this.videoElement.src = '';
+            }
+
+            this.isPlaying = false;
+            this.isPaused = false;
+
+            // Navigate to home instead of goBack
+            if (window.Router) {
+                window.Router.navigateTo('#/home');
             }
         },
 
@@ -1075,6 +1174,286 @@
                 .catch(function(error) {
                     console.error('PlayerScreen: Failed to report playback stopped', error);
                 });
+        },
+
+        /**
+         * Auto-scrobble to Trakt when playback completes
+         */
+        autoScrobbleToTrakt: function() {
+            var item = this.mediaItem;
+
+            console.log('========================================');
+            console.log('AUTO-SCROBBLE TO TRAKT - PLAYBACK ENDED');
+            console.log('Media item:', item ? item.Name : 'NULL');
+            console.log('Type:', item ? item.Type : 'NULL');
+            console.log('========================================');
+
+            // Only scrobble episodes (movies could be added later)
+            if (!item || item.Type !== 'Episode') {
+                console.log('PlayerScreen: Not an episode, skipping Trakt scrobble');
+                return;
+            }
+
+            // Check if Trakt is connected
+            if (!window.TraktClient || !window.TraktClient.isAuthenticated()) {
+                console.log('PlayerScreen: Trakt not connected, skipping scrobble');
+                return;
+            }
+
+            // We need the series info to get provider IDs
+            var seriesId = item.SeriesId;
+            if (!seriesId) {
+                console.log('PlayerScreen: No SeriesId on episode, cannot scrobble');
+                return;
+            }
+
+            var seasonNum = item.ParentIndexNumber;
+            var episodeNum = item.IndexNumber;
+
+            console.log('PlayerScreen: Scrobbling S' + seasonNum + 'E' + episodeNum + ' of series ' + item.SeriesName);
+
+            // Fetch series to get ProviderIds
+            window.JellyfinClient.getItem(seriesId)
+                .then(function(series) {
+                    console.log('========================================');
+                    console.log('AUTO-SCROBBLE - SERIES DATA FETCHED');
+                    console.log('Series Name:', series.Name);
+                    console.log('Series ID:', series.Id);
+                    console.log('Series ProviderIds:', JSON.stringify(series.ProviderIds));
+                    console.log('========================================');
+
+                    // Build show IDs from Jellyfin ProviderIds
+                    var showIds = {};
+                    if (series.ProviderIds) {
+                        if (series.ProviderIds.Imdb) {
+                            showIds.imdb = series.ProviderIds.Imdb;
+                        }
+                        if (series.ProviderIds.Tmdb) {
+                            showIds.tmdb = parseInt(series.ProviderIds.Tmdb, 10);
+                        }
+                        if (series.ProviderIds.Tvdb) {
+                            showIds.tvdb = parseInt(series.ProviderIds.Tvdb, 10);
+                        }
+                    }
+
+                    if (Object.keys(showIds).length === 0) {
+                        console.error('PlayerScreen: No provider IDs found for series, cannot scrobble');
+                        return;
+                    }
+
+                    var show = {
+                        title: series.Name,
+                        ids: showIds
+                    };
+
+                    console.log('PlayerScreen: Sending scrobble with IDs:', JSON.stringify(showIds));
+
+                    // Mark episode as watched on Trakt
+                    return window.TraktClient.markEpisodeWatched(show, seasonNum, episodeNum);
+                })
+                .then(function(response) {
+                    if (response) {
+                        console.log('========================================');
+                        console.log('AUTO-SCROBBLE SUCCESS');
+                        console.log('Response:', JSON.stringify(response));
+                        console.log('========================================');
+                    }
+                })
+                .catch(function(error) {
+                    console.error('PlayerScreen: Failed to auto-scrobble to Trakt:', error);
+                });
+        },
+
+        /**
+         * Handle playback ended - check for auto-play next episode
+         */
+        handlePlaybackEnded: function() {
+            var self = this;
+            var item = this.mediaItem;
+
+            console.log('=== HANDLE PLAYBACK ENDED ===');
+            console.log('mediaItem:', item ? item.Name : 'NULL');
+            console.log('mediaItem Type:', item ? item.Type : 'NULL');
+
+            // Only auto-play for TV episodes
+            if (!item || item.Type !== 'Episode') {
+                console.log('PlayerScreen: Not an episode, going back');
+                this.goBackAfterDelay();
+                return;
+            }
+
+            // Try to get and play next episode
+            this.getNextEpisode(item).then(function(nextEpisode) {
+                if (nextEpisode) {
+                    self.showAutoPlayCountdown(nextEpisode);
+                } else {
+                    console.log('PlayerScreen: No next episode found');
+                    self.goBackAfterDelay();
+                }
+            }).catch(function(error) {
+                console.error('PlayerScreen: Error getting next episode:', error);
+                self.goBackAfterDelay();
+            });
+        },
+
+        /**
+         * Go back to previous screen after a short delay
+         */
+        goBackAfterDelay: function() {
+            setTimeout(function() {
+                if (window.Router) {
+                    window.Router.goBack();
+                }
+            }, 1000);
+        },
+
+        /**
+         * Get next episode in the series
+         */
+        getNextEpisode: function(currentItem) {
+            return new Promise(function(resolve, reject) {
+                console.log('=== GET NEXT EPISODE ===');
+                console.log('Current item:', currentItem.Name);
+                console.log('SeriesId:', currentItem.SeriesId);
+                console.log('Season:', currentItem.ParentIndexNumber);
+                console.log('Episode:', currentItem.IndexNumber);
+
+                if (!currentItem.SeriesId) {
+                    console.log('No SeriesId, cannot find next episode');
+                    resolve(null);
+                    return;
+                }
+
+                // Get all episodes for the series
+                window.JellyfinClient.getAllEpisodesForSeries(currentItem.SeriesId)
+                    .then(function(response) {
+                        var episodes = response.Items || [];
+                        console.log('Total episodes in series:', episodes.length);
+
+                        // Sort by season and episode number
+                        episodes.sort(function(a, b) {
+                            if (a.ParentIndexNumber !== b.ParentIndexNumber) {
+                                return a.ParentIndexNumber - b.ParentIndexNumber;
+                            }
+                            return a.IndexNumber - b.IndexNumber;
+                        });
+
+                        // Find current episode index
+                        var currentIndex = -1;
+                        for (var i = 0; i < episodes.length; i++) {
+                            if (episodes[i].Id === currentItem.Id) {
+                                currentIndex = i;
+                                break;
+                            }
+                        }
+
+                        console.log('Current episode index:', currentIndex);
+
+                        // Get next episode
+                        if (currentIndex >= 0 && currentIndex < episodes.length - 1) {
+                            var nextEp = episodes[currentIndex + 1];
+                            console.log('Next episode found:', nextEp.Name, 'S' + nextEp.ParentIndexNumber + 'E' + nextEp.IndexNumber);
+                            resolve(nextEp);
+                        } else {
+                            console.log('No next episode (end of series or not found)');
+                            resolve(null);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Failed to get episodes:', error);
+                        reject(error);
+                    });
+            });
+        },
+
+        /**
+         * Show auto-play countdown for next episode
+         */
+        showAutoPlayCountdown: function(nextEpisode) {
+            var self = this;
+            var countdown = 10;
+
+            console.log('Showing auto-play countdown for:', nextEpisode.Name);
+
+            // Create countdown overlay using existing CSS structure
+            var overlay = document.createElement('div');
+            overlay.className = 'autoplay-overlay';
+            overlay.innerHTML =
+                '<div class="autoplay-dialog">' +
+                    '<div class="autoplay-next-info">' +
+                        '<div class="autoplay-details">' +
+                            '<h3>Up Next</h3>' +
+                            '<h2>' + (nextEpisode.SeriesName || '') + '</h2>' +
+                            '<p class="autoplay-episode">S' + nextEpisode.ParentIndexNumber + ' E' + nextEpisode.IndexNumber + ' - ' + nextEpisode.Name + '</p>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="autoplay-countdown">' +
+                        'Playing in <strong class="countdown-number">' + countdown + '</strong> seconds' +
+                    '</div>' +
+                    '<div class="autoplay-buttons">' +
+                        '<button class="btn btn-primary play-now focusable">Play Now</button>' +
+                        '<button class="btn btn-secondary cancel focusable">Cancel</button>' +
+                    '</div>' +
+                '</div>';
+
+            document.body.appendChild(overlay);
+
+            // Focus play now button
+            var playNowBtn = overlay.querySelector('.play-now');
+            var cancelBtn = overlay.querySelector('.cancel');
+
+            if (playNowBtn && window.FocusManager) {
+                window.FocusManager.setFocus(playNowBtn);
+            }
+
+            // Countdown timer
+            var countdownEl = overlay.querySelector('.countdown-number');
+            var countdownInterval = setInterval(function() {
+                countdown--;
+                if (countdownEl) {
+                    countdownEl.textContent = countdown;
+                }
+
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    self.playNextEpisode(nextEpisode, overlay);
+                }
+            }, 1000);
+
+            // Button handlers
+            playNowBtn.addEventListener('click', function() {
+                clearInterval(countdownInterval);
+                self.playNextEpisode(nextEpisode, overlay);
+            });
+
+            cancelBtn.addEventListener('click', function() {
+                clearInterval(countdownInterval);
+                overlay.remove();
+                self.goBackAfterDelay();
+            });
+
+            // Store interval for cleanup
+            this.autoplayInterval = countdownInterval;
+            this.autoplayOverlay = overlay;
+        },
+
+        /**
+         * Play the next episode
+         */
+        playNextEpisode: function(episode, overlay) {
+            console.log('Playing next episode:', episode.Name);
+
+            if (overlay) {
+                overlay.remove();
+            }
+
+            // Set up playback for next episode
+            var episodeId = episode.Id;
+            window.StateManager.playback.currentMediaId = episodeId;
+            window.StateManager.playback.resumePosition = 0;
+
+            // Reload player with new episode
+            this.loadMedia(episodeId);
         },
 
         /**
